@@ -1,0 +1,87 @@
+<div>티쳐블 머신 이미지 분류 모델</div>
+<button type="button" onclick="init()">시작하기</button>
+
+<div id="webcam-container"></div>
+
+<h3>실시간 확률 목록</h3>
+<div id="label-container"></div>
+
+<hr>
+
+<h3 style="color: #007bff;">[최종 결과]</h3>
+<div id="result-container" style="font-size: 1.2rem; font-weight: bold; color: #007bff;">
+    웹캠을 켜고 물체를 비춰주세요.
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+
+<script type="text/javascript">
+    const URL = "https://teachablemachine.withgoogle.com/models/CeXdKOUetu/";
+
+    let model, webcam, labelContainer, resultContainer, maxPredictions;
+    
+    // 기준 임계값 (70%)
+    const CONFIDENCE_THRESHOLD = 0.70; 
+
+    async function init() {
+        const modelURL = URL + "model.json";
+        const metadataURL = URL + "metadata.json";
+
+        model = await tmImage.load(modelURL, metadataURL);
+        maxPredictions = model.getTotalClasses();
+
+        const flip = true; 
+        webcam = new tmImage.Webcam(400, 400, flip); 
+        await webcam.setup(); 
+        await webcam.play();
+        window.requestAnimationFrame(loop);
+
+        document.getElementById("webcam-container").appendChild(webcam.canvas);
+        
+        // 기존 확률 목록 컨테이너
+        labelContainer = document.getElementById("label-container");
+        for (let i = 0; i < maxPredictions; i++) { 
+            labelContainer.appendChild(document.createElement("div"));
+        }
+
+        // 새롭게 추가된 결과 컨테이너 연결
+        resultContainer = document.getElementById("result-container");
+    }
+
+    async function loop() {
+        webcam.update(); 
+        await predict();
+        window.requestAnimationFrame(loop);
+    }
+
+    async function predict() {
+        const prediction = await model.predict(webcam.canvas);
+        
+        // 70% 이상인 결과를 담아둘 배열
+        let highConfidenceResults = [];
+
+        for (let i = 0; i < maxPredictions; i++) {
+            const probability = prediction[i].probability;
+            const className = prediction[i].className;
+
+            // 1. 기존 화면에는 확률을 계속해서 소수점 형태(또는 % 형태)로 모두 출력합니다.
+            const classPrediction = className + ": " + probability.toFixed(2);
+            labelContainer.childNodes[i].innerHTML = classPrediction;
+
+            // 2. 만약 확률이 70%(0.70) 이상이라면 배열에 따로 저장합니다.
+            if (probability >= CONFIDENCE_THRESHOLD) {
+                const percentage = (probability * 100).toFixed(0);
+                highConfidenceResults.push(`${className} (${percentage}%)`);
+            }
+        }
+
+        // 3. 70% 이상인 결과가 있다면 화면에 콤마(,)로 연결해서 보여줍니다.
+        if (highConfidenceResults.length > 0) {
+            resultContainer.innerHTML = highConfidenceResults.join(", ");
+        } else {
+            // 70%를 넘는 클래스가 아무것도 없을 때 출력할 메시지
+            resultContainer.innerHTML = "분석 중... (70% 이상 확실한 항목 없음)";
+        }
+    }
+</script>
